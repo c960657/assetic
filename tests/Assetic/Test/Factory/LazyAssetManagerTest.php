@@ -11,7 +11,9 @@
 
 namespace Assetic\Test\Factory;
 
+use Assetic\Asset\AssetCollection;
 use Assetic\Factory\LazyAssetManager;
+use Assetic\Factory\Resource\AssetResource;
 
 class LazyAssetManagerTest extends \PHPUnit_Framework_TestCase
 {
@@ -65,19 +67,47 @@ class LazyAssetManagerTest extends \PHPUnit_Framework_TestCase
 
     public function testGetResources()
     {
-        $resources = array(
-            $this->getMock('Assetic\\Factory\\Resource\\ResourceInterface'),
-            $this->getMock('Assetic\\Factory\\Resource\\ResourceInterface'),
+        $loader = $this->getMock('Assetic\\Factory\\Loader\\FormulaLoaderInterface');
+
+        $asset1 = $this->getMock('Assetic\\Asset\\AssetInterface');
+        $asset2 = $this->getMock('Assetic\\Asset\\AssetInterface');
+        $assetCollection = new AssetCollection(array($asset1, $asset2));
+
+        $resource1 = $this->getMock('Assetic\\Factory\\Resource\\ResourceInterface');
+        $resource2 = $this->getMock('Assetic\\Factory\\Resource\\ResourceInterface');
+
+        $formula = array(
+            array('js/core.js', 'js/more.js'),
+            array('?yui_js'),
+            array('output' => 'js/all.js'),
         );
 
-        $this->am->addResource($resources[0], 'foo');
-        $this->am->addResource($resources[1], 'bar');
+        $loader->expects($this->at(0))
+            ->method('load')
+            ->with($resource1)
+            ->will($this->returnValue(array('baz' => $formula)));
+        $loader->expects($this->at(1))
+            ->method('load')
+            ->with($resource2)
+            ->will($this->returnValue(array()));
+        $this->factory->expects($this->once())
+            ->method('createAsset')
+            ->with($formula[0], $formula[1], $formula[2] + array('name' => 'baz'))
+            ->will($this->returnValue($assetCollection));
+
+        $this->am->setLoader('foo', $loader);
+        $this->am->setLoader('bar', $loader);
+
+        $this->am->addResource($resource1, 'foo');
+        $this->am->addResource($resource2, 'bar');
 
         $ret = $this->am->getResources();
 
-        foreach ($resources as $resource) {
-            $this->assertTrue(in_array($resource, $ret, true));
-        }
+        $this->assertCount(4, $ret);
+        $this->assertTrue(in_array($resource1, $ret, true));
+        $this->assertTrue(in_array($resource2, $ret, true));
+        $this->assertTrue(in_array(new AssetResource($asset1), $ret));
+        $this->assertTrue(in_array(new AssetResource($asset2), $ret));
     }
 
     public function testGetResourcesEmpty()

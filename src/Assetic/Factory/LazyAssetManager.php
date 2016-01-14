@@ -14,6 +14,7 @@ namespace Assetic\Factory;
 use Assetic\Asset\AssetInterface;
 use Assetic\AssetManager;
 use Assetic\Factory\Loader\FormulaLoaderInterface;
+use Assetic\Factory\Resource\AssetResource;
 use Assetic\Factory\Resource\ResourceInterface;
 
 /**
@@ -81,9 +82,29 @@ class LazyAssetManager extends AssetManager
      */
     public function getResources()
     {
+        if (!$this->loaded) {
+            $this->load();
+        }
+
         $resources = array();
         foreach ($this->resources as $r) {
             $resources = array_merge($resources, $r);
+        }
+
+        foreach ($this->formulae as $name => $formula) {
+            list($inputs, $filters, $options) = $formula;
+            $options['name'] = $name;
+            $assets = array();
+            $assets[] = $this->factory->createAsset($inputs, $filters, $options);
+            while ($asset = array_shift($assets)) {
+                if ($asset instanceof \Traversable) {
+                    // Flatten hierarchy.
+                    $assets = array_merge($assets, iterator_to_array($asset));
+                } else {
+                    $resources[] = new AssetResource($asset);
+                }
+            }
+
         }
 
         return $resources;
